@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
-import { acquireSceneDirection, assertSceneDirection, directionInstruction, outlineMatches } from '../src/sceneDirection.mjs';
+import { acquireSceneDirection, assertSceneDirection, directionInstruction, outlineMatches, invalidateSceneDirection } from '../src/sceneDirection.mjs';
 
 function fixture() {
     let current = true, calls = 0;
@@ -52,5 +52,13 @@ test('bridge is optional; unavailable and disabled providers do not cause extra 
     assert.equal(acquireSceneDirection(), null);
     assert.equal(directionInstruction(null), ''); assert.equal(outlineMatches({ director: 'legacy' }, null), true);
     globalThis.EuleSceneDirection = { acquire: () => ({ key: 'eule', text: 'Skip', isCurrent: () => true }) };
-    try { assert.equal(acquireSceneDirection().text, 'Skip'); } finally { delete globalThis.EuleSceneDirection; }
+    try {
+        const lease = acquireSceneDirection(); assert.equal(lease.text, 'Skip');
+        invalidateSceneDirection(); assert.throws(() => assertSceneDirection(lease), /STALE/);
+    } finally { delete globalThis.EuleSceneDirection; }
+});
+test('confirmed constraints cannot silently overflow a small Director context budget', async () => {
+    const f = fixture(); f.sandbox.extensionSettings.contextSize = 300;
+    await assert.rejects(vm.runInContext('prepareDirector(undefined,{})', f.sandbox), /CONTEXT_BUDGET/);
+    assert.equal(f.calls(), 0); assert.equal(f.injected.at(-1)[1], '');
 });

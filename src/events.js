@@ -1,3 +1,4 @@
+import { invalidateSceneDirection } from './sceneDirection.mjs';
 import { chat, streamingProcessor } from "../../../../../script.js";
 import { isEnabled } from "./settings/settings.js";
 import { prepareDirector, attachPendingOutline, clearInjects } from "./director.js";
@@ -8,6 +9,7 @@ import { debug } from "../lib/utils.js";
 const ALLOWED_TYPES = ["normal", "continue", "swipe", "regenerate", "group_chat"];
 
 async function onChatChanged() {
+    invalidateSceneDirection();
 	await clearInjects();
 	DirectorPreviewManager.scanAndRender();
 }

@@ -1,11 +1,15 @@
 // Optional public bridge. No dependency on either extension's files or private state.
+let epoch = 0;
+export function invalidateSceneDirection() { epoch++; }
 export function acquireSceneDirection() {
     const provider = globalThis.RPGStateTracker?.sceneDirection ?? globalThis.EuleSceneDirection;
     const value = provider?.acquire?.();
     if (!value) return null;
     if (typeof value.key !== 'string' || typeof value.text !== 'string' || value.text.length > 24000
         || typeof value.isCurrent !== 'function' || !value.isCurrent()) throw Error('SCENE_DIRECTION_INVALID');
-    return Object.freeze({ ...value, report: status => provider?.report?.({ key: value.key, ...status }) });
+    const acquiredEpoch = epoch;
+    return Object.freeze({ ...value, isCurrent: () => epoch === acquiredEpoch && value.isCurrent(),
+        report: status => provider?.report?.({ key: value.key, ...status }) });
 }
 export function assertSceneDirection(value) {
     if (value && !value.isCurrent()) throw Error('SCENE_DIRECTION_STALE');

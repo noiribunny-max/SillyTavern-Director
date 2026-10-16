@@ -35,6 +35,7 @@ export async function injectDirector(outline = "") {
 
 /** Clears the director injection (e.g. when the extension is disabled or the chat changes). */
 export async function clearInjects() {
+    if(chat_metadata.director){chat_metadata.director.pendingOutline=null;chat_metadata.director.pendingDirectionKey=null;}
 	await injectDirector("");
 }
 
