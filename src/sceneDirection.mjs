@@ -16,7 +16,7 @@ export function assertSceneDirection(value) {
 }
 export function directionInstruction(value) {
     return value ? '\n\nAuthoritative confirmed user constraints (override creative planning preferences; never override player agency or knowledge boundaries):\n'
-        + value.text + '\nPlan these concurrent strands in ONE request and ONE shared time beat. If an outer scene and private inner dialogue are confirmed, present the outer scene first, then “Zeitgleich” the inner view. Leave all player responses open. Never report a narrative time skip as committed inventory time.\n' : '';
+        + value.text + '\nPlan these concurrent strands in ONE request and ONE shared time beat. Honor the confirmed narrative style, strand coverage and focus. Treat physical scenes, calls and private inner dialogues as separate knowledge and location scopes. Use “Zeitgleich” for concurrent views without advancing time twice. Leave all player responses open. Never report a narrative time skip as committed inventory time.\n' : '';
 }
 export function outlineMatches(message, direction) {
     return (message?.directorDirectionKey ?? null) === (direction?.key ?? null);

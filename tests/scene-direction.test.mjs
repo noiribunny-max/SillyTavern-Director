@@ -62,3 +62,8 @@ test('confirmed constraints cannot silently overflow a small Director context bu
     await assert.rejects(vm.runInContext('prepareDirector(undefined,{})', f.sandbox), /CONTEXT_BUDGET/);
     assert.equal(f.calls(), 0); assert.equal(f.injected.at(-1)[1], '');
 });
+
+test('bridge honors arbitrary strand focus and dialogue style without imposing outer-first ordering',()=>{
+ const text=directionInstruction({text:'dialogue; focus phone; several physical strands'});
+ assert.match(text,/Honor the confirmed narrative style, strand coverage and focus/);assert.match(text,/separate knowledge and location scopes/);assert.doesNotMatch(text,/present the outer scene first/);
+});
