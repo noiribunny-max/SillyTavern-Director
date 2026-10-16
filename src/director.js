@@ -1,3 +1,4 @@
+import { acquireSceneDirection, assertSceneDirection, outlineMatches } from './sceneDirection.mjs';
 import { chat, chat_metadata, saveChatConditional, setExtensionPrompt, getExtensionPromptRoleByName } from "../../../../../script.js";
 import { extensionSettings } from "../index.js";
 import { debug, getLastNonSystemMessageIndex, getPreviousNonSystemMessageIndex } from "../lib/utils.js";
@@ -34,6 +35,7 @@ export async function injectDirector(outline = "") {
 
 /** Clears the director injection (e.g. when the extension is disabled or the chat changes). */
 export async function clearInjects() {
+    if(chat_metadata.director){chat_metadata.director.pendingOutline=null;chat_metadata.director.pendingDirectionKey=null;}
 	await injectDirector("");
 }
 
@@ -61,6 +63,9 @@ function readPendingUserMessage(options) {
  */
 export async function prepareDirector(type, options) {
 	if (!chat_metadata.director) chat_metadata.director = {};
+    await injectDirector("");
+    chat_metadata.director.pendingOutline = null;
+    const direction = acquireSceneDirection();
 
 	// Swipe / regenerate / continue: re-doing an EXISTING bot reply. Reuse its outline, or generate
 	// from the prior context, and attach to that same (already-present) message.
@@ -70,18 +75,21 @@ export async function prepareDirector(type, options) {
 			await injectDirector("");
 			return;
 		}
-		let outline = chat[lastId]?.director || null;
+		let outline = outlineMatches(chat[lastId], direction) ? chat[lastId]?.director || null : null;
 		if (!outline) {
 			const prevId = getPreviousNonSystemMessageIndex(lastId);
-			outline = await generateDirectorOutline(prevId !== -1 ? prevId : lastId, "");
+			outline = await generateDirectorOutline(prevId !== -1 ? prevId : lastId, "", direction);
 			if (outline) {
-				chat[lastId].director = outline;
+				assertSceneDirection(direction);
+                chat[lastId].director = outline;
+                chat[lastId].directorDirectionKey = direction?.key ?? null;
 				await saveChatConditional();
 				DirectorPreviewManager.updatePreview(lastId);
 			}
 		}
 		debug("Director (repeat)", { type, lastId, hasOutline: !!outline });
-		await injectDirector(outline || "");
+		assertSceneDirection(direction);
+        await injectDirector(outline || "");
 		return;
 	}
 
@@ -89,9 +97,11 @@ export async function prepareDirector(type, options) {
 	// The outline is held pending and attached to the next BOT message that renders.
 	const pendingUserText = readPendingUserMessage(options);
 	const lastId = getLastNonSystemMessageIndex();
-	const outline = await generateDirectorOutline(lastId, pendingUserText);
+	const outline = await generateDirectorOutline(lastId, pendingUserText, direction);
 
-	chat_metadata.director.pendingOutline = outline || "";
+	assertSceneDirection(direction);
+    chat_metadata.director.pendingDirectionKey = direction?.key ?? null;
+    chat_metadata.director.pendingOutline = outline || "";
 	await saveChatConditional();
 
 	debug("Director (new reply)", { lastId, hasPendingUserText: !!pendingUserText, hasOutline: !!outline });
@@ -108,6 +118,7 @@ export async function attachPendingOutline(mesId) {
 	if (!meta || !meta.pendingOutline) return;
 	if (!chat[mesId] || chat[mesId].is_user) return; // bot messages only
 	chat[mesId].director = meta.pendingOutline;
+    chat[mesId].directorDirectionKey = meta.pendingDirectionKey ?? null;
 	meta.pendingOutline = null;
 	await saveChatConditional();
 	DirectorPreviewManager.updatePreview(mesId);
@@ -121,6 +132,7 @@ export async function attachPendingOutline(mesId) {
 export async function saveDirectorToMessage(mesId, text) {
 	if (!chat[mesId]) return;
 	chat[mesId].director = String(text ?? "");
+    chat[mesId].directorDirectionKey = acquireSceneDirection()?.key ?? null;
 	await saveChatConditional();
 	DirectorPreviewManager.updatePreview(mesId);
 }

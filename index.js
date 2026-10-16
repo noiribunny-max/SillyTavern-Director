@@ -1,3 +1,4 @@
+import { invalidateSceneDirection } from './src/sceneDirection.mjs';
 import { eventSource, event_types } from "../../../../script.js";
 import { extension_settings } from "../../../../scripts/extensions.js";
 import { SlashCommand } from "../../../slash-commands/SlashCommand.js";
@@ -24,6 +25,7 @@ jQuery(async () => {
 });
 
 eventSource.on(event_types.CHAT_CHANGED, eventHandlers.onChatChanged);
+if (event_types.GENERATION_STOPPED) eventSource.on(event_types.GENERATION_STOPPED, () => { invalidateSceneDirection(); return eventHandlers.onChatChanged(); });
 eventSource.on(event_types.GENERATION_AFTER_COMMANDS, eventHandlers.onGenerateAfterCommands);
 eventSource.on(event_types.CHARACTER_MESSAGE_RENDERED, eventHandlers.onCharacterMessageRendered);
 eventSource.on(event_types.USER_MESSAGE_RENDERED, eventHandlers.onUserMessageRendered);

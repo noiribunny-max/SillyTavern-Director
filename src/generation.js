@@ -1,3 +1,4 @@
+import { acquireSceneDirection, assertSceneDirection, directionInstruction } from './sceneDirection.mjs';
 import { chat, deactivateSendButtons, activateSendButtons, extension_prompt_types } from "../../../../../script.js";
 import { getContext } from "../../../../../scripts/extensions.js";
 import { extensionSettings } from "../index.js";
@@ -310,14 +311,14 @@ async function getActiveWorldInfo(ctx, mesNum, contextSize) {
  * chat-completion backends add a generation prompt, so a trailing "assistant" message would render as
  * a completed turn and the model would emit an end token immediately (dies after 1 token).
  */
-async function buildDirectorMessages(ctx, mesNum, conn, pendingUserText = "") {
+async function buildDirectorMessages(ctx, mesNum, conn, pendingUserText = "", direction = null) {
 	const authorsNote = getAuthorsNote(ctx);
 	const system = await buildDirectorSystemPrompt(ctx, mesNum, conn.contextSize, authorsNote);
 	const directorRole = extensionSettings.directorRole || "user";
 	// Resolve {{user}} / {{char}} (etc.) in the director instruction — it's sent to the director model
 	// directly, so SillyTavern won't substitute it for us.
 	const rawPrompt = String(extensionSettings.directorPrompt || "").trim();
-	const promptContent = typeof ctx.substituteParams === "function" ? String(ctx.substituteParams(rawPrompt)) : rawPrompt;
+	const promptContent = (typeof ctx.substituteParams === "function" ? String(ctx.substituteParams(rawPrompt)) : rawPrompt) + directionInstruction(direction);
 	// SillyTavern merges this trailing instruction into the preceding user turn, so wrap it in
 	// <director> tags to keep the director's ask clearly separated from the user's roleplay text.
 	const instruction = { role: directorRole, content: `<director>\n${promptContent}\n</director>` };
@@ -337,6 +338,8 @@ async function buildDirectorMessages(ctx, mesNum, conn, pendingUserText = "") {
 	used += (await countTokens(ctx, instruction.content)) + PER_MESSAGE_OVERHEAD;
 	if (pending) used += (await countTokens(ctx, pending)) + PER_MESSAGE_OVERHEAD;
 	if (inChatNote) used += (await countTokens(ctx, inChatNote.content)) + PER_MESSAGE_OVERHEAD;
+
+	if (direction && used > budget) throw Error("SCENE_DIRECTION_CONTEXT_BUDGET_EXCEEDED");
 
 	const source = chat
 		.map((c, index) => ({ c, index }))
@@ -455,7 +458,7 @@ async function sendDirectorRequest(ctx, conn, messages) {
  * @param {number} mesNum - The message index providing the context window.
  * @returns {Promise<string>} The outline text (may be empty).
  */
-export async function generateDirectorOutline(mesNum, pendingUserText = "") {
+export async function generateDirectorOutline(mesNum, pendingUserText = "", direction = acquireSceneDirection()) {
 	// Hide the send button so the user can't fire a second generation while the director is working.
 	// Only manage the buttons if no one else is currently showing the stop button (stop hidden ===
 	// true): during the GENERATION_AFTER_COMMANDS intercept the host generation hasn't shown its own
@@ -466,8 +469,13 @@ export async function generateDirectorOutline(mesNum, pendingUserText = "") {
 	try {
 		const ctx = getContext();
 		const conn = resolveDirectorConnection(ctx);
-		const messages = await buildDirectorMessages(ctx, mesNum, conn, pendingUserText);
+		assertSceneDirection(direction);
+		const messages = await buildDirectorMessages(ctx, mesNum, conn, pendingUserText, direction);
+		assertSceneDirection(direction);
+		direction?.report({status:"Planungsanfrage enthält bestätigte Vorgaben"});
 		const outline = await sendDirectorRequest(ctx, conn, messages);
+		assertSceneDirection(direction);
+		direction?.report({status:"Plan erstellt",text:String(outline || "")});
 		return String(outline || "").trim();
 	} finally {
 		if (manageStopButton) restoreSendButtons();
